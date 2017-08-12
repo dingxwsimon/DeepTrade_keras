@@ -23,14 +23,14 @@ import numpy
 
 def extract_from_file(filepath, output_prefix):
     days_for_test = 700
-    input_shape = [30, 61]  # [length of time series, length of feature]
+    input_shape = [30, 83]  # [length of time series, length of feature]
     window = input_shape[0]
     fp = open("%s_feature.%s" % (output_prefix, window), "w")
     lp = open("%s_label.%s" % (output_prefix, window), "w")
     fpt = open("%s_feature.test.%s" % (output_prefix, window), "w")
     lpt = open("%s_label.test.%s" % (output_prefix, window), "w")
 
-    selector = ["ROCP", "OROCP", "HROCP", "LROCP", "MACD", "RSI", "VROCP", "BOLL", "MA", "VMA", "PRICE_VOLUME"]
+    selector = ["ROCP", "OROCP", "HROCP", "LROCP", "MACD", "RSI", "VROCP", "BOLL", "ADX", "MA", "VMA", "PRICE_VOLUME"]
 
     raw_data = read_sample_data(filepath)
     moving_features, moving_labels = extract_feature(raw_data=raw_data, selector=selector, window=input_shape[0],
@@ -58,17 +58,37 @@ def extract_from_file(filepath, output_prefix):
     fpt.close()
     lpt.close()
 
+def extractfeatureonly_from_file(filepath, output_prefix):
+    days_for_test = 100
+    input_shape = [30, 83]  # [length of time series, length of feature]
+    window = input_shape[0]
+    fp = open("%s_feature_only.%s" % (output_prefix, window), "w")
+
+    selector = ["ROCP", "OROCP", "HROCP", "LROCP", "MACD", "RSI", "VROCP", "BOLL", "ADX", "MA", "VMA", "PRICE_VOLUME"]
+
+    raw_data = read_sample_data(filepath)
+    moving_features = extract_feature(raw_data=raw_data, selector=selector, window=input_shape[0],
+                                                     with_label=False, flatten=True)
+    print("feature extraction done, start writing to file...")
+    train_end_test_begin = moving_features.shape[0] - days_for_test
+    for i in range(train_end_test_begin, moving_features.shape[0]):
+        for item in moving_features[i]:
+            fp.write("%s\t" % item)
+        fp.write("\n")
+
+    fp.close()
+
 
 if __name__ == '__main__':
     days_for_test = 700
-    input_shape = [30, 61]  # [length of time series, length of feature]
+    input_shape = [30, 83]  # [length of time series, length of feature]
     window = input_shape[0]
     fp = open("ultimate_feature.%s" % window, "w")
     lp = open("ultimate_label.%s" % window, "w")
     fpt = open("ultimate_feature.test.%s" % window, "w")
     lpt = open("ultimate_label.test.%s" % window, "w")
 
-    selector = ["ROCP", "OROCP", "HROCP", "LROCP", "MACD", "RSI", "VROCP", "BOLL", "MA", "VMA", "PRICE_VOLUME"]
+    selector = ["ROCP", "OROCP", "HROCP", "LROCP", "MACD", "RSI", "VROCP", "BOLL", "ADX", "MA", "VMA", "PRICE_VOLUME"]
     dataset_dir = "./dataset"
     for filename in os.listdir(dataset_dir):
         #if filename != '000001.csv':

@@ -19,7 +19,7 @@ from keras.callbacks import TensorBoard, ModelCheckpoint
 
 from windpuller import WindPuller
 from dataset import DataSet
-from feature import extract_from_file
+from feature import extractfeatureonly_from_file, extract_from_file
 
 
 def read_ultimate(path, input_shape):
@@ -73,7 +73,7 @@ def calculate_cumulative_return(labels, pred):
     return cr
 
 
-def evaluate_model(model_path, code, input_shape=[30, 61]):
+def evaluate_model(model_path, code, input_shape=[30, 83]):
     extract_from_file("dataset/%s.csv" % code, code)
     train_set, test_set = read_feature(".", input_shape, code)
     saved_wp = WindPuller(input_shape).load_model(model_path)
@@ -86,6 +86,14 @@ def evaluate_model(model_path, code, input_shape=[30, 61]):
     for i in range(len(test_set.labels)):
         print(str(test_set.labels[i]) + "\t" + str(pred[i]) + "\t" + str(cr[i] + 1.) + "\t" + str(cr[i]))
 
+def model_predict(model_path, code, input_shape=[30, 83]):
+    extractfeatureonly_from_file("dataset/%s.csv" % code, code)
+    ultimate_features = numpy.loadtxt("%s/%s_feature_only.%s" % (".", code, str(input_shape[0])))
+    ultimate_features = numpy.reshape(ultimate_features, [-1, input_shape[0], input_shape[1]])
+    saved_wp = WindPuller(input_shape).load_model(model_path)
+    pred = saved_wp.predict(ultimate_features, 1024)
+    for i in range(len(pred)):
+        print(str(pred[i]))
 
 def make_model(input_shape, nb_epochs=100, batch_size=128, lr=0.01, n_layers=1, n_hidden=16, rate_dropout=0.3):
     model_path = 'model.%s' % input_shape[0]
@@ -121,8 +129,10 @@ if __name__ == '__main__':
     if len(sys.argv) > 1:
         operation = sys.argv[1]
     if operation == "train":
-        make_model([30, 61], 3000, 512, lr=0.001)
+        make_model([30, 83], 3000, 512, lr=0.001)
     elif operation == "predict":
         evaluate_model("model.30.best", "000001")
+    elif operation == "live":
+        model_predict("model.30.best", "000001")
     else:
         print("Usage: gossip.py [train | predict]")

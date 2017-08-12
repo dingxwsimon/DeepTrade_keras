@@ -22,7 +22,7 @@ import math
 class ChartFeature(object):
     def __init__(self, selector):
         self.selector = selector
-        self.supported = {"ROCP", "OROCP", "HROCP", "LROCP", "MACD", "RSI", "VROCP", "BOLL", "MA", "VMA", "PRICE_VOLUME"}
+        self.supported = {"ROCP", "OROCP", "HROCP", "LROCP", "MACD", "RSI", "VROCP", "BOLL", "ADX", "MA", "VMA", "PRICE_VOLUME"}
         self.feature = []
 
     def moving_extract(self, window=30, open_prices=None, close_prices=None, high_prices=None, low_prices=None,
@@ -37,6 +37,7 @@ class ChartFeature(object):
             moving_features = []
             moving_labels = []
             while p + window < feature_arr.shape[1]:
+                # feature from p to p + window - 1
                 x = feature_arr[:, p:p + window]
                 # y = cmp(close_prices[p + window], close_prices[p + window - 1]) + 1
                 p_change = (close_prices[p + window] - close_prices[p + window - 1]) / close_prices[p + window - 1]
@@ -51,13 +52,14 @@ class ChartFeature(object):
             return numpy.asarray(moving_features), numpy.asarray(moving_labels)
         else:
             moving_features = []
+            #NOTICE THE DIFFERENCE OF THIS EQUAL
             while p + window <= feature_arr.shape[1]:
                 x = feature_arr[:, p:p + window]
                 if flatten:
                     x = x.flatten("F")
                 moving_features.append(numpy.nan_to_num(x))
                 p += 1
-            return moving_features
+            return numpy.asarray(moving_features)
 
     def extract(self, open_prices=None, close_prices=None, high_prices=None, low_prices=None, volumes=None):
         self.feature = []
@@ -84,9 +86,15 @@ class ChartFeature(object):
 
     def extract_by_type(self, feature_type, open_prices=None, close_prices=None, high_prices=None, low_prices=None,
                         volumes=None):
+
         if feature_type == 'ROCP':
             rocp = talib.ROCP(close_prices, timeperiod=1)
             self.feature.append(rocp)
+            ocratio = ((open_prices - close_prices) / close_prices)
+            hlratio = ((high_prices - low_prices) / low_prices)
+            self.feature.append(ocratio)
+            self.feature.append(hlratio)
+
         if feature_type == 'OROCP':
             orocp = talib.ROCP(open_prices, timeperiod=1)
             self.feature.append(orocp)
@@ -96,6 +104,8 @@ class ChartFeature(object):
         if feature_type == 'LROCP':
             lrocp = talib.ROCP(low_prices, timeperiod=1)
             self.feature.append(lrocp)
+
+
         if feature_type == 'MACD':
             macd, signal, hist = talib.MACD(close_prices, fastperiod=12, slowperiod=26, signalperiod=9)
             norm_signal = numpy.minimum(numpy.maximum(numpy.nan_to_num(signal), -1), 1)
@@ -114,6 +124,15 @@ class ChartFeature(object):
             self.feature.append(macdrocp)
             self.feature.append(signalrocp)
             self.feature.append(histrocp)
+
+            macdrocp1 = talib.ROCP(norm_macd, timeperiod=1)
+            signalrocp1 = talib.ROCP(norm_signal, timeperiod=1)
+            histrocp1 = talib.ROCP(norm_hist, timeperiod=1)
+
+            self.feature.append(macdrocp1)
+            self.feature.append(signalrocp1)
+            self.feature.append(histrocp1)
+
         if feature_type == 'RSI':
             rsi6 = talib.RSI(close_prices, timeperiod=6)
             rsi12 = talib.RSI(close_prices, timeperiod=12)
@@ -136,97 +155,140 @@ class ChartFeature(object):
             self.feature.append(rsi6rocp)
             self.feature.append(rsi12rocp)
             self.feature.append(rsi24rocp)
+            rsi30 = talib.RSI(close_prices, timeperiod=30)
+            rsi30ma30 = numpy.nan_to_num(talib.EMA(rsi30, timeperiod=30))
+            self.feature.append(rsi30)
+            self.feature.append(rsi30ma30)
+            self.feature.append(numpy.arctan((rsi30 - rsi30ma30) / rsi30ma30))
+
         if feature_type == 'VROCP':
             vrocp = numpy.arctan(numpy.nan_to_num(talib.ROCP(numpy.maximum(volumes, 1), timeperiod=1)))
             # norm_volumes = (volumes - numpy.mean(volumes)) / math.sqrt(numpy.var(volumes))
             # vrocp = talib.ROCP(norm_volumes + numpy.max(norm_volumes) - numpy.min(norm_volumes), timeperiod=1)
             # self.feature.append(norm_volumes)
             self.feature.append(vrocp)
+
+
         if feature_type == 'BOLL':
-            upperband, middleband, lowerband = talib.BBANDS(close_prices, timeperiod=5, nbdevup=2, nbdevdn=2, matype=0)
+            upperband, middleband, lowerband = talib.BBANDS(close_prices, timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
             self.feature.append((upperband - close_prices) / close_prices)
             self.feature.append((middleband - close_prices) / close_prices)
             self.feature.append((lowerband - close_prices) / close_prices)
+
+        if feature_type == 'ADX':
+            adx = numpy.nan_to_num(talib.ADX(high_prices, low_prices, close_prices, timeperiod=14))
+            mdi = numpy.nan_to_num(talib.MINUS_DI(high_prices, low_prices, close_prices, timeperiod=14))
+            pdi = numpy.nan_to_num(talib.PLUS_DI(high_prices, low_prices, close_prices, timeperiod=14))
+            self.feature.append(numpy.arctan((adx - 20) / 20))
+            self.feature.append(numpy.arctan((pdi - mdi) / mdi))
+
+
         if feature_type == 'MA':
             ma5 = numpy.nan_to_num(talib.MA(close_prices, timeperiod=5))
             ma10 = numpy.nan_to_num(talib.MA(close_prices, timeperiod=10))
             ma20 = numpy.nan_to_num(talib.MA(close_prices, timeperiod=20))
             ma30 = numpy.nan_to_num(talib.MA(close_prices, timeperiod=30))
+            ma50 = numpy.nan_to_num(talib.MA(close_prices, timeperiod=50))
             ma60 = numpy.nan_to_num(talib.MA(close_prices, timeperiod=60))
             ma90 = numpy.nan_to_num(talib.MA(close_prices, timeperiod=90))
+            ma100 = numpy.nan_to_num(talib.MA(close_prices, timeperiod=100))
             ma120 = numpy.nan_to_num(talib.MA(close_prices, timeperiod=120))
             ma180 = numpy.nan_to_num(talib.MA(close_prices, timeperiod=180))
+            ma200 = numpy.nan_to_num(talib.MA(close_prices, timeperiod=200))
             ma360 = numpy.nan_to_num(talib.MA(close_prices, timeperiod=360))
             ma720 = numpy.nan_to_num(talib.MA(close_prices, timeperiod=720))
             ma5rocp = talib.ROCP(ma5, timeperiod=1)
             ma10rocp = talib.ROCP(ma10, timeperiod=1)
             ma20rocp = talib.ROCP(ma20, timeperiod=1)
             ma30rocp = talib.ROCP(ma30, timeperiod=1)
+            ma50rocp = talib.ROCP(ma50, timeperiod=1)
             ma60rocp = talib.ROCP(ma60, timeperiod=1)
             ma90rocp = talib.ROCP(ma90, timeperiod=1)
+            ma100rocp = talib.ROCP(ma100, timeperiod=1)
             ma120rocp = talib.ROCP(ma120, timeperiod=1)
             ma180rocp = talib.ROCP(ma180, timeperiod=1)
+            ma200rocp = talib.ROCP(ma200, timeperiod=1)
             ma360rocp = talib.ROCP(ma360, timeperiod=1)
             ma720rocp = talib.ROCP(ma720, timeperiod=1)
             self.feature.append(ma5rocp)
             self.feature.append(ma10rocp)
             self.feature.append(ma20rocp)
             self.feature.append(ma30rocp)
+            self.feature.append(ma50rocp)
             self.feature.append(ma60rocp)
             self.feature.append(ma90rocp)
+            self.feature.append(ma100rocp)
             self.feature.append(ma120rocp)
             self.feature.append(ma180rocp)
+            self.feature.append(ma200rocp)
             self.feature.append(ma360rocp)
             self.feature.append(ma720rocp)
             self.feature.append((ma5 - close_prices) / close_prices)
             self.feature.append((ma10 - close_prices) / close_prices)
             self.feature.append((ma20 - close_prices) / close_prices)
             self.feature.append((ma30 - close_prices) / close_prices)
+            self.feature.append((ma50 - close_prices) / close_prices)
             self.feature.append((ma60 - close_prices) / close_prices)
             self.feature.append((ma90 - close_prices) / close_prices)
+            self.feature.append((ma100 - close_prices) / close_prices)
             self.feature.append((ma120 - close_prices) / close_prices)
             self.feature.append((ma180 - close_prices) / close_prices)
+            self.feature.append((ma200 - close_prices) / close_prices)
             self.feature.append((ma360 - close_prices) / close_prices)
             self.feature.append((ma720 - close_prices) / close_prices)
+
+
         if feature_type == 'VMA':
             ma5 = talib.MA(volumes, timeperiod=5)
             ma10 = talib.MA(volumes, timeperiod=10)
             ma20 = talib.MA(volumes, timeperiod=20)
             ma30 = talib.MA(volumes, timeperiod=30)
+            ma50 = talib.MA(volumes, timeperiod=50)
             ma60 = talib.MA(volumes, timeperiod=60)
             ma90 = talib.MA(volumes, timeperiod=90)
+            ma100 = talib.MA(volumes, timeperiod=100)
             ma120 = talib.MA(volumes, timeperiod=120)
             ma180 = talib.MA(volumes, timeperiod=180)
+            ma200 = talib.MA(volumes, timeperiod=200)
             ma360 = talib.MA(volumes, timeperiod=360)
             ma720 = talib.MA(volumes, timeperiod=720)
             ma5rocp = numpy.arctan(numpy.nan_to_num(talib.ROCP(ma5, timeperiod=1)))
             ma10rocp = numpy.arctan(numpy.nan_to_num(talib.ROCP(ma10, timeperiod=1)))
             ma20rocp = numpy.arctan(numpy.nan_to_num(talib.ROCP(ma20, timeperiod=1)))
             ma30rocp = numpy.arctan(numpy.nan_to_num(talib.ROCP(ma30, timeperiod=1)))
+            ma50rocp = numpy.arctan(numpy.nan_to_num(talib.ROCP(ma50, timeperiod=1)))
             ma60rocp = numpy.arctan(numpy.nan_to_num(talib.ROCP(ma60, timeperiod=1)))
+            ma90rocp = numpy.arctan(numpy.nan_to_num(talib.ROCP(ma90, timeperiod=1)))
             ma90rocp = numpy.arctan(numpy.nan_to_num(talib.ROCP(ma90, timeperiod=1)))
             ma120rocp = numpy.arctan(numpy.nan_to_num(talib.ROCP(ma120, timeperiod=1)))
             ma180rocp = numpy.arctan(numpy.nan_to_num(talib.ROCP(ma180, timeperiod=1)))
+            ma200rocp = numpy.arctan(numpy.nan_to_num(talib.ROCP(ma200, timeperiod=1)))
             ma360rocp = numpy.arctan(numpy.nan_to_num(talib.ROCP(ma360, timeperiod=1)))
             ma720rocp = numpy.arctan(numpy.nan_to_num(talib.ROCP(ma720, timeperiod=1)))
             self.feature.append(ma5rocp)
             self.feature.append(ma10rocp)
             self.feature.append(ma20rocp)
             self.feature.append(ma30rocp)
+            self.feature.append(ma50rocp)
             self.feature.append(ma60rocp)
             self.feature.append(ma90rocp)
+            self.feature.append(ma10rocp)
             self.feature.append(ma120rocp)
             self.feature.append(ma180rocp)
+            self.feature.append(ma200rocp)
             self.feature.append(ma360rocp)
             self.feature.append(ma720rocp)
             self.feature.append(numpy.arctan(numpy.nan_to_num((ma5 - volumes) / (volumes + 1))))
             self.feature.append(numpy.arctan(numpy.nan_to_num((ma10 - volumes) / (volumes + 1))))
             self.feature.append(numpy.arctan(numpy.nan_to_num((ma20 - volumes) / (volumes + 1))))
             self.feature.append(numpy.arctan(numpy.nan_to_num((ma30 - volumes) / (volumes + 1))))
+            self.feature.append(numpy.arctan(numpy.nan_to_num((ma50 - volumes) / (volumes + 1))))
             self.feature.append(numpy.arctan(numpy.nan_to_num((ma60 - volumes) / (volumes + 1))))
             self.feature.append(numpy.arctan(numpy.nan_to_num((ma90 - volumes) / (volumes + 1))))
+            self.feature.append(numpy.arctan(numpy.nan_to_num((ma100 - volumes) / (volumes + 1))))
             self.feature.append(numpy.arctan(numpy.nan_to_num((ma120 - volumes) / (volumes + 1))))
             self.feature.append(numpy.arctan(numpy.nan_to_num((ma180 - volumes) / (volumes + 1))))
+            self.feature.append(numpy.arctan(numpy.nan_to_num((ma200 - volumes) / (volumes + 1))))
             self.feature.append(numpy.arctan(numpy.nan_to_num((ma360 - volumes) / (volumes + 1))))
             self.feature.append(numpy.arctan(numpy.nan_to_num((ma720 - volumes) / (volumes + 1))))
         if feature_type == 'PRICE_VOLUME':
@@ -241,6 +303,7 @@ class ChartFeature(object):
 def extract_feature(raw_data, selector, window=30, with_label=True, flatten=True):
     chart_feature = ChartFeature(selector)
     sorted_data = sorted(raw_data, key=lambda x:x.date)
+    #print(sorted_data[0:2])
     closes = []
     opens = []
     highs = []
